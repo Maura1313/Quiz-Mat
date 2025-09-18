@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz de Juros Simples</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #f3e5f5, #e1bee7, #d1c4e9, #b39ddb, #9575cd);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        #quiz-settings, #quiz-content, #result-section {
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .question-options {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .option-button {
+            background-color: #f0f4f8;
+            color: #4a5568;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 2px solid transparent;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+        }
+
+        .option-button:hover {
+            background-color: #e2e8f0;
+        }
+        
+        .option-button.correct {
+            background-color: #d1fae5;
+            border-color: #10b981;
+            color: #065f46;
+        }
+
+        .option-button.incorrect {
+            background-color: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+        
+        .option-button.correct:hover, .option-button.incorrect:hover {
+            opacity: 0.8;
+        }
+
+        .quiz-button {
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .quiz-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(254, 202, 87, 0.4);
+        }
+
+        .quiz-button:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e2e8f0;
+            border-radius: 9999px;
+            height: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #64748b;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .result-text {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto">
+        <div id="start-screen">
+            <h1 class="text-4xl font-extrabold mb-4">Quiz de Juros Simples</h1>
+            <p class="text-gray-600 mb-6">Selecione a quantidade de perguntas para iniciar o quiz.</p>
+
+            <div id="quiz-settings" class="flex flex-col gap-4">
+                <button onclick="startQuiz(5)" class="quiz-button">5 Perguntas</button>
+                <button onclick="startQuiz(10)" class="quiz-button">10 Perguntas</button>
+                <button onclick="startQuiz(15)" class="quiz-button">15 Perguntas</button>
+            </div>
+        </div>
+
+        <div id="quiz-content" class="hidden">
+            <div class="progress-bar-container">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <h2 id="question-text" class="text-xl font-bold text-gray-800 mb-4"></h2>
+            <div id="options-container" class="question-options"></div>
+            <button id="next-button" class="quiz-button mt-6 hidden">Próxima Pergunta</button>
+        </div>
+
+        <div id="result-section" class="hidden">
+            <h2 class="result-text text-gray-800 mb-4">Seu resultado: <span id="score-text"></span></h2>
+            <button onclick="restartQuiz()" class="quiz-button mt-4">Tentar Novamente</button>
+        </div>
+    </div>
+
+    <script>
+        // Use crypto.randomUUID() to generate a unique ID for the app instance
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        // Firebase configuration
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        // Import necessary Firebase functions
+        // NOTE: These imports are added here for clarity, but they will be loaded by the parent environment.
+        // For a full app, you would include the script tags as in a real project.
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, addDoc, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Quiz data
+        const allQuestions = [
+            {
+                question: 'Qual é a fórmula para calcular juros simples?',
+                options: [
+                    { text: '$J = C \\times i \\times n$', correct: true },
+                    { text: '$J = C \\times (1 + i)^n$', correct: false },
+                    { text: '$M = C \\times (1 + i \\times n)$', correct: false },
+                    { text: '$J = C / (i \\times n)$', correct: false }
+                ],
+                rationale: [
+                    'A fórmula $J = C \\times i \\times n$ é a forma correta e fundamental para calcular juros simples, onde $J$ é o juro, $C$ é o capital, $i$ é a taxa de juros e $n$ é o tempo.',
+                    'Esta é a fórmula para juros compostos, que calcula os juros sobre o montante acumulado, não apenas sobre o capital inicial.',
+                    'Esta é a fórmula para o montante em juros simples, não para o cálculo apenas dos juros.',
+                    'Esta fórmula não representa um cálculo de juros simples. O juro é o resultado de uma multiplicação, não de uma divisão.'
+                ]
+            },
+            {
+                question: 'Um capital de R$ 10.000,00 é aplicado a uma taxa de juros simples de 5% ao mês durante 6 meses. Qual será o valor dos juros?',
+                options: [
+                    { text: 'R$ 3.000,00', correct: true },
+                    { text: 'R$ 500,00', correct: false },
+                    { text: 'R$ 13.000,00', correct: false },
+                    { text: 'R$ 6.000,00', correct: false }
+                ],
+                rationale: [
+                    'Para calcular, use a fórmula $J = C \\times i \\times n$: $J = 10000 \\times 0.05 \\times 6 = R\\$3.000,00$.',
+                    'Esse valor seria o juro de apenas um mês.',
+                    'Esse valor seria o montante final, não apenas o valor dos juros.',
+                    'O cálculo de juros de 6 meses é $10000 \\times 0.05 \\times 6$, que resulta em R$3.000,00.'
+                ]
+            },
+            {
+                question: 'O que representa a variável "$C$" na fórmula de juros simples?',
+                options: [
+                    { text: 'O capital inicial ou principal', correct: true },
+                    { text: 'O montante final', correct: false },
+                    { text: 'A taxa de juros', correct: false },
+                    { text: 'O tempo da aplicação', correct: false }
+                ],
+                rationale: [
+                    'O "$C$" representa o capital inicial, que é o valor principal aplicado ou emprestado, sobre o qual os juros são calculados.',
+                    'O montante final é a soma do capital com os juros, representado por "$M$", não por "$C$".',
+                    'A taxa de juros é representada pela variável "$i$".',
+                    'O tempo da aplicação é representado pela variável "$n$".'
+                ]
+            },
+            {
+                question: 'Se um capital de R$ 5.000,00 gerou R$ 750,00 de juros simples em 3 meses, qual foi a taxa de juros mensal?',
+                options: [
+                    { text: '5%', correct: true },
+                    { text: '15%', correct: false },
+                    { text: '3%', correct: false },
+                    { text: '2.5%', correct: false }
+                ],
+                rationale: [
+                    'Usando a fórmula $i = J / (C \\times n)$: $i = 750 / (5000 \\times 3) = 750 / 15000 = 0.05$, que é 5%.',
+                    'O cálculo 750 / 5000 = 0.15, que seria a taxa total de juros para o período, não a taxa mensal.',
+                    'O cálculo 750 / 3 = 250, que não representa a taxa de juros.',
+                    'Esse valor está incorreto.'
+                ]
+            },
+            {
+                question: 'Um investimento rende R$ 1.200,00 de juros em 1 ano, a uma taxa de 2% ao mês. Qual é o valor do capital inicial?',
+                options: [
+                    { text: 'R$ 5.000,00', correct: true },
+                    { text: 'R$ 10.000,00', correct: false },
+                    { text: 'R$ 6.000,00', correct: false },
+                    { text: 'R$ 2.400,00', correct: false }
+                ],
+                rationale: [
+                    'Primeiro, ajuste o tempo para meses: 1 ano = 12 meses. A fórmula é $C = J / (i \\times n) = 1200 / (0.02 \\times 12) = 1200 / 0.24 = R\\$5.000,00$.',
+                    'Este valor seria se a taxa fosse de 1% ao mês.',
+                    'Este valor não corresponde à fórmula.',
+                    'Este valor não corresponde à fórmula.'
+                ]
+            },
+            {
+                question: 'Qual a diferença entre juros simples e juros compostos?',
+                options: [
+                    { text: 'Juros simples são calculados apenas sobre o capital inicial, enquanto juros compostos são calculados sobre o montante acumulado.', correct: true },
+                    { text: 'Juros simples são calculados diariamente e juros compostos anualmente.', correct: false },
+                    { text: 'Juros simples usam taxas fixas e juros compostos, variáveis.', correct: false },
+                    { text: 'Não há diferença significativa, são apenas termos diferentes para o mesmo cálculo.', correct: false }
+                ],
+                rationale: [
+                    'Esta é a principal diferença conceitual. Os juros simples não incidem sobre os juros já gerados.',
+                    'O período de cálculo pode ser o mesmo para ambos, não sendo um fator de diferenciação.',
+                    'Ambos os tipos de juros podem usar taxas fixas ou variáveis, dependendo do contrato, então isso não é uma diferença fundamental.',
+                    'Eles são conceitos matemáticos distintos com fórmulas e resultados diferentes.'
+                ]
+            },
+            {
+                question: 'Se a taxa de juros for de 30% ao ano, qual a taxa equivalente mensal em juros simples?',
+                options: [
+                    { text: '2.5%', correct: true },
+                    { text: '3%', correct: false },
+                    { text: '30%', correct: false },
+                    { text: '1.5%', correct: false }
+                ],
+                rationale: [
+                    'A taxa mensal em juros simples é obtida dividindo a taxa anual pelo número de meses no ano: $30\\% / 12 = 2.5\\%$.',
+                    'Esta taxa seria $36\\%$ ao ano, não $30\\%$.',
+                    'A taxa de $30\\%$ ao ano é a taxa anual, não a mensal.',
+                    'Esse valor está incorreto.'
+                ]
+            },
+            {
+                question: 'Calcule o montante de uma aplicação de R$ 2.000,00 a juros simples de 10% ao ano, durante 4 anos.',
+                options: [
+                    { text: 'R$ 2.800,00', correct: true },
+                    { text: 'R$ 800,00', correct: false },
+                    { text: 'R$ 2.200,00', correct: false },
+                    { text: 'R$ 3.000,00', correct: false }
+                ],
+                rationale: [
+                    'Primeiro, calcule os juros: $J = 2000 \\times 0.10 \\times 4 = 800$. Em seguida, some ao capital inicial para encontrar o montante: $M = C + J = 2000 + 800 = R\\$2.800,00$.',
+                    'Esse valor corresponde apenas aos juros gerados, não ao montante final.',
+                    'Esse valor seria o montante para um período de 1 ano, não 4 anos.',
+                    'Esse valor está incorreto.'
+                ]
+            },
+            {
+                question: 'Quanto tempo uma aplicação de R$ 5.000,00 precisa ficar investida para render R$ 1.500,00 de juros, a uma taxa de juros simples de 1% ao mês?',
+                options: [
+                    { text: '30 meses', correct: true },
+                    { text: '3 meses', correct: false },
+                    { text: '15 meses', correct: false },
+                    { text: '6 meses', correct: false }
+                ],
+                rationale: [
+                    'Use a fórmula $n = J / (C \\times i)$: $n = 1500 / (5000 \\times 0.01) = 1500 / 50 = 30$ meses.',
+                    'Esse valor seria o tempo se a taxa fosse de 10% ao mês.',
+                    'Esse valor está incorreto.',
+                    'Esse valor seria o tempo se a taxa fosse de 5% ao mês.'
+                ]
+            },
+            {
+                question: 'Se o montante de um investimento é R$ 12.000,00 e o capital inicial foi R$ 10.000,00, qual o valor dos juros simples gerados?',
+                options: [
+                    { text: 'R$ 2.000,00', correct: true },
+                    { text: 'R$ 10.000,00', correct: false },
+                    { text: 'R$ 12.000,00', correct: false },
+                    { text: 'R$ 22.000,00', correct: false }
+                ],
+                rationale: [
+                    'Os juros são a diferença entre o montante final e o capital inicial: $J = M - C = 12000 - 10000 = R\\$2.000,00$.',
+                    'Este valor é o capital inicial.',
+                    'Este valor é o montante final.',
+                    'Este valor seria a soma do capital com o montante, que não faz sentido no cálculo de juros.'
+                ]
+            },
+            {
+                question: 'Qual a taxa de juros simples anual de uma aplicação de R$ 1.000,00 que, em 2 anos, gerou um montante de R$ 1.200,00?',
+                options: [
+                    { text: '10%', correct: true },
+                    { text: '5%', correct: false },
+                    { text: '20%', correct: false },
+                    { text: '15%', correct: false }
+                ],
+                rationale: [
+                    'Juros gerados são $1200 - 1000 = R\\$200,00$. A taxa é $i = J / (C \\times n) = 200 / (1000 \\times 2) = 200 / 2000 = 0.1$, ou 10%.',
+                    'Esse seria o valor se a aplicação fosse por 4 anos.',
+                    'Esse seria o valor da taxa total do período de 2 anos.',
+                    'Esse valor está incorreto.'
+                ]
+            },
+            {
+                question: 'O que a sigla "$M$" representa em alguns cálculos de juros simples?',
+                options: [
+                    { text: 'Montante', correct: true },
+                    { text: 'Capital', correct: false },
+                    { text: 'Juros', correct: false },
+                    { text: 'Taxa mensal', correct: false }
+                ],
+                rationale: [
+                    'O "$M$" é usado para representar o montante, que é o valor final da aplicação, incluindo o capital e os juros.',
+                    'O capital é representado por "$C$".',
+                    'Os juros são representados por "$J$".',
+                    'A taxa de juros é representada por "$i$".'
+                ]
+            },
+            {
+                question: 'Uma dívida de R$ 500,00 a juros simples de 2% ao mês triplica em quanto tempo?',
+                options: [
+                    { text: '100 meses', correct: true },
+                    { text: '50 meses', correct: false },
+                    { text: '25 meses', correct: false },
+                    { text: '75 meses', correct: false }
+                ],
+                rationale: [
+                    'Para a dívida triplicar, os juros devem ser o dobro do capital inicial: $2 \\times 500 = R\\$1.000,00$. Use a fórmula $n = J / (C \\times i) = 1000 / (500 \\times 0.02) = 1000 / 10 = 100$ meses.',
+                    'Essa resposta não corresponde ao cálculo correto.',
+                    'Essa resposta não corresponde ao cálculo correto.',
+                    'Essa resposta não corresponde ao cálculo correto.'
+                ]
+            },
+            {
+                question: 'Se um capital de R$ 8.000,00 foi aplicado por 4 meses e gerou um montante de R$ 8.800,00, qual a taxa de juros simples mensal?',
+                options: [
+                    { text: '2.5%', correct: true },
+                    { text: '10%', correct: false },
+                    { text: '5%', correct: false },
+                    { text: '1%', correct: false }
+                ],
+                rationale: [
+                    'Primeiro, calcule os juros: $J = 8800 - 8000 = R\\$800,00$. Use a fórmula $i = J / (C \\times n) = 800 / (8000 \\times 4) = 800 / 32000 = 0.025$, ou 2.5%.',
+                    'Essa seria a taxa total para os 4 meses, não a mensal.',
+                    'Essa resposta não corresponde ao cálculo correto.',
+                    'Essa resposta não corresponde ao cálculo correto.'
+                ]
+            },
+            {
+                question: 'Qual o capital inicial necessário para se obter R$ 400,00 de juros simples em 1 ano, a uma taxa de 20% ao ano?',
+                options: [
+                    { text: 'R$ 2.000,00', correct: true },
+                    { text: 'R$ 1.000,00', correct: false },
+                    { text: 'R$ 4.000,00', correct: false },
+                    { text: 'R$ 800,00', correct: false }
+                ],
+                rationale: [
+                    'Use a fórmula $C = J / (i \\times n) = 400 / (0.20 \\times 1) = 400 / 0.20 = R\\$2.000,00$.',
+                    'Esse valor geraria R$200,00 de juros.',
+                    'Esse valor geraria R$800,00 de juros.',
+                    'Esse valor está incorreto.'
+                ]
+            }
+        ];
+
+        let questions = [];
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let quizSize = 0;
+
+        // Firebase setup and authentication
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let userId = '';
+
+        window.onload = async () => {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                } else {
+                    const anonUser = await signInAnonymously(auth);
+                    userId = anonUser.user.uid;
+                }
+            });
+        };
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        async function startQuiz(size) {
+            quizSize = size;
+            questions = shuffleArray([...allQuestions]).slice(0, quizSize);
+            currentQuestionIndex = 0;
+            score = 0;
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('quiz-content').classList.remove('hidden');
+            document.getElementById('result-section').classList.add('hidden');
+
+            displayQuestion();
+        }
+
+        function displayQuestion() {
+            const currentQuestion = questions[currentQuestionIndex];
+            const questionTextElement = document.getElementById('question-text');
+            const optionsContainer = document.getElementById('options-container');
+            const nextButton = document.getElementById('next-button');
+            const progressBar = document.getElementById('progress-bar');
+
+            questionTextElement.innerText = currentQuestion.question;
+            optionsContainer.innerHTML = '';
+            nextButton.classList.add('hidden');
+            
+            // Randomize options
+            const shuffledOptions = shuffleArray([...currentQuestion.options]);
+
+            shuffledOptions.forEach(option => {
+                const button = document.createElement('button');
+                button.classList.add('option-button');
+                button.innerText = option.text;
+                button.addEventListener('click', () => selectOption(button, option));
+                optionsContainer.appendChild(button);
+            });
+
+            // Update progress bar
+            const progress = (currentQuestionIndex / quizSize) * 100;
+            progressBar.style.width = `${progress}%`;
+        }
+
+        function selectOption(selectedButton, selectedOption) {
+            const options = document.querySelectorAll('.option-button');
+            options.forEach(button => {
+                button.disabled = true;
+                const optionData = questions[currentQuestionIndex].options.find(o => o.text === button.innerText);
+                if (optionData.correct) {
+                    button.classList.add('correct');
+                } else {
+                    button.classList.add('incorrect');
+                }
+            });
+
+            if (selectedOption.correct) {
+                score++;
+                selectedButton.classList.add('correct');
+            } else {
+                selectedButton.classList.add('incorrect');
+            }
+            
+            // Show rationale
+            // This is a simplified approach. In a more complex app, you might show a modal.
+            
+            const rationaleText = questions[currentQuestionIndex].rationale.find(r => selectedOption.correct ? selectedOption.correct : !selectedOption.correct);
+            const rationaleContainer = document.createElement('div');
+            rationaleContainer.classList.add('mt-2', 'text-sm', 'text-gray-500');
+            rationaleContainer.innerText = rationaleText;
+            document.getElementById('options-container').appendChild(rationaleContainer);
+
+            document.getElementById('next-button').classList.remove('hidden');
+        }
+
+        function nextQuestion() {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < quizSize) {
+                displayQuestion();
+            } else {
+                showResults();
+            }
+        }
+
+        function showResults() {
+            document.getElementById('quiz-content').classList.add('hidden');
+            document.getElementById('result-section').classList.remove('hidden');
+            document.getElementById('score-text').innerText = `${score} de ${quizSize}`;
+            
+            // Save the result to Firestore
+            saveResultToFirestore();
+        }
+        
+        async function saveResultToFirestore() {
+            if (!userId) {
+                console.error("User ID not available. Cannot save result.");
+                return;
+            }
+
+            try {
+                // IMPORTANT: The path must follow the specified security rules.
+                const userDocRef = doc(db, `/artifacts/${appId}/users/${userId}`, 'quiz_results');
+                
+                await setDoc(userDocRef, {
+                    quizId: `juros-simples-quiz-${quizSize}`,
+                    score: score,
+                    totalQuestions: quizSize,
+                    timestamp: new Date().toISOString()
+                }, { merge: true });
+                
+                console.log("Resultado salvo com sucesso!");
+
+            } catch (error) {
+                console.error("Erro ao salvar resultado no Firestore:", error);
+            }
+        }
+
+        function restartQuiz() {
+            document.getElementById('start-screen').classList.remove('hidden');
+            document.getElementById('result-section').classList.add('hidden');
+        }
+
+        document.getElementById('next-button').addEventListener('click', nextQuestion);
+    </script>
+</body>
+</html>
